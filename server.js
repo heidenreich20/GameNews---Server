@@ -8,6 +8,7 @@ require('dotenv').config()
 const newsRoutes = require('./Routes/newsRoutes')
 
 const app = express()
+app.set('trust proxy', 1)
 
 app.use(helmet())
 app.use(cors({
@@ -37,6 +38,11 @@ app.use((_, res) => res.status(404).json({ error: 'Route not found' }))
 
 app.use((err, req, res, next) => {
   console.error(err)
+  
+  if (err.code === '22P02') {
+    return res.status(400).json({ error: 'Formato de ID inválido' })
+  }
+
   res.status(err.status ?? 500).json({ error: err.message ?? 'Internal server error' })
 })
 
