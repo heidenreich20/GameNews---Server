@@ -3,6 +3,7 @@ const postgres = require('postgres')
 const { drizzle } = require('drizzle-orm/postgres-js')
 const cors = require('cors')
 const helmet = require('helmet')
+const { runMigrations } = require('./db/migrate')
 require('dotenv').config()
 
 const newsRoutes = require('./Routes/newsRoutes')
@@ -60,21 +61,21 @@ if (require.main === module) {
 
   const db = drizzle(sql)
 
-  // Verify the connection before starting the server
   sql`SELECT 1`
-    .then(() => {
-      // Attach db to app.locals so routes can access it
-      app.locals.db = db
-      app.locals.sql = sql
+  .then(async () => {
+    app.locals.db  = db
+    app.locals.sql = sql
 
-      const port = process.env.PORT || 3000
-      app.listen(port, () => console.log(`Server running on port ${port}`))
-      console.log('Connected to database')
-    })
-    .catch(err => {
-      console.error('Database connection failed:', err)
-      process.exit(1)
-    })
+    await runMigrations(sql)
+
+    const port = process.env.PORT || 3000
+    app.listen(port, () => console.log(`Server running on port ${port}`))
+    console.log('Connected to database')
+  })
+  .catch(err => {
+    console.error('Database connection failed:', err)
+    process.exit(1)
+  })
 }
 
 module.exports = app

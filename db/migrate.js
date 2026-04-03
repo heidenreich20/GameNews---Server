@@ -1,9 +1,7 @@
 require('dotenv').config()
 const postgres = require('postgres')
 
-const sql = postgres(process.env.DATABASE_URL)
-
-async function migrate() {
+async function runMigrations(sql) {
   console.log('Running migrations...')
 
   await sql`
@@ -31,10 +29,17 @@ async function migrate() {
   `
 
   console.log('Migrations complete.')
-  await sql.end()
 }
 
-migrate().catch(err => {
-  console.error('Migration failed:', err)
-  process.exit(1)
-})
+// Allow running directly with: npm run db:migrate
+if (require.main === module) {
+  const sql = postgres(process.env.DATABASE_URL)
+  runMigrations(sql)
+    .then(() => sql.end())
+    .catch(err => {
+      console.error('Migration failed:', err)
+      process.exit(1)
+    })
+}
+
+module.exports = { runMigrations }
