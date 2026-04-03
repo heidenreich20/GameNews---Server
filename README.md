@@ -1,16 +1,17 @@
 # GameNewsServer
 
-RESTful API for the Game News platform, built with Node.js, Express, and PostgreSQL.
+RESTful API for the Game News platform, built with Node.js, Express, and PostgreSQL. Fully containerized with Docker and deployed on Render.
 
 ## Stack
 
-- **Runtime**: Node.js 24
+- **Runtime**: Node.js 22
 - **Framework**: Express 4
 - **Database**: PostgreSQL 16 (via Drizzle ORM + postgres.js)
 - **Validation**: Joi
 - **Security**: Helmet, CORS, express-rate-limit, API key auth
 - **Containerization**: Docker + Docker Compose
 - **Testing**: Jest + Supertest
+- **Hosting**: Render (API + PostgreSQL)
 
 ## Project Structure
 
@@ -26,7 +27,7 @@ GameNewsServer/
 ├── Routes/
 │   └── newsRoutes.js         # Express router
 ├── db/
-│   ├── migrate.js            # Creates tables and indexes
+│   ├── migrate.js            # Creates tables and indexes (runs on startup)
 │   └── seed.js               # Seeds initial data
 ├── tests/
 │   └── news.test.js          # Integration test suite
@@ -55,18 +56,18 @@ npm install
 
 ### 2. Configure environment
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
+Create a `.env` file at the root:
 
 ```env
 DATABASE_URL=postgresql://game_news:secret@localhost:5435/game_news_db
 TEST_DATABASE_URL=postgresql://game_news:secret@localhost:5435/game_news_db
 ADMIN_API_KEY=your_secret_key
+DATABASE_SSL=false
 PORT=3000
 ```
+
+> `DATABASE_SSL=false` disables SSL for local Docker connections.
+> Set it to `true` when connecting to a remote database like Render.
 
 ### 3. Start the database
 
@@ -79,6 +80,8 @@ docker compose up -d db
 ```bash
 npm run db:migrate
 ```
+
+Migrations also run automatically every time the server starts.
 
 ### 5. Seed initial data (optional)
 
@@ -114,10 +117,10 @@ Returns paginated news articles.
 
 **Query parameters:**
 
-| Parameter | Type   | Default | Description          |
-|-----------|--------|---------|----------------------|
-| `page`    | number | `1`     | Page number          |
-| `limit`   | number | `10`    | Articles per page    |
+| Parameter | Type   | Default | Description       |
+|-----------|--------|---------|-------------------|
+| `page`    | number | `1`     | Page number       |
+| `limit`   | number | `10`    | Articles per page |
 
 **Response:**
 
@@ -135,14 +138,14 @@ Returns paginated news articles.
 
 #### `GET /news/category`
 
-Returns articles filtered by category.
+Returns articles filtered by category (case-insensitive).
 
 **Query parameters:**
 
-| Parameter  | Type   | Default | Description                        |
-|------------|--------|---------|------------------------------------|
-| `category` | string | —       | Category name (case-insensitive)   |
-| `limit`    | number | `10`    | Max articles to return             |
+| Parameter  | Type   | Default | Description                      |
+|------------|--------|---------|----------------------------------|
+| `category` | string | —       | Category name (case-insensitive) |
+| `limit`    | number | `10`    | Max articles to return           |
 
 **Response:**
 
@@ -182,10 +185,10 @@ Returns a single article by UUID.
 
 **Error responses:**
 
-| Status | Reason                    |
-|--------|---------------------------|
-| `400`  | Malformed UUID            |
-| `404`  | Article not found         |
+| Status | Reason            |
+|--------|-------------------|
+| `400`  | Malformed UUID    |
+| `404`  | Article not found |
 
 ---
 
@@ -227,7 +230,7 @@ Content-Type: application/json
 
 #### `GET /health`
 
-Returns the API and database status.
+Returns API and database status. Used by Render for health checks.
 
 ```json
 { "status": "ok" }
@@ -237,10 +240,10 @@ Returns the API and database status.
 
 ## Rate Limiting
 
-| Route         | Limit           |
-|---------------|-----------------|
-| `GET` routes  | 100 req / min   |
-| `POST /news`  | 10 req / min    |
+| Route        | Limit         |
+|--------------|---------------|
+| `GET` routes | 100 req / min |
+| `POST /news` | 10 req / min  |
 
 ---
 
@@ -253,7 +256,7 @@ docker compose up -d db
 npm test
 ```
 
-Tests use the same database as development, truncating tables between each test for isolation.
+Tests connect to the same database as development and truncate tables between each test for isolation.
 
 ---
 
@@ -272,34 +275,93 @@ npm run dev
 docker compose up -d
 ```
 
-The API container connects to the database using the internal Docker hostname `db`.
+The API container connects to the database using the internal Docker service name `db` — handled automatically by Docker Compose networking.
+
+### Port mapping
+
+| Service  | Internal port | External port |
+|----------|---------------|---------------|
+| API      | 3000          | 3000          |
+| Database | 5432          | 5435          |
+
+Port 5435 is used externally to avoid conflicts with other local PostgreSQL instances.
 
 ---
 
 ## Deployment
 
-### Environment variables in production
+### Environment variables
 
-| Variable        | Description                        |
-|-----------------|------------------------------------|
-| `DATABASE_URL`  | PostgreSQL connection string       |
-| `ADMIN_API_KEY` | Secret key for write endpoints     |
-| `PORT`          | Server port (default: `3000`)      |
+| Variable        | Description                                       |
+|-----------------|---------------------------------------------------|
+| `DATABASE_URL`  | PostgreSQL connection string                      |
+| `DATABASE_SSL`  | Set to `true` for remote databases (Render, etc.) |
+| `ADMIN_API_KEY` | Secret key for write endpoints                    |
+| `PORT`          | Server port (default: `3000`)                     |
+
+> Migrations run automatically on every server startup via `runMigrations()` in `server.js` — no manual migration step needed after deploying.
+
+---
+
+### Render (current production)
+
+The API and database are both hosted on Render.
+
+**Database setup:**
+1. Create a **PostgreSQL** database on Render
+2. Copy the **Internal Database URL** for use by the API service
+3. Copy the **External Database URL** for running seeds locally
+
+**API setup:**
+1. Create a **Web Service** on Render
+2. Connect your GitHub repo
+3. Set **Environment** to `Docker`
+4. Set the following environment variables:
+
+```env
+DATABASE_URL=        # Internal Database URL from Render
+DATABASE_SSL=true
+ADMIN_API_KEY=       # Your secret key
+PORT=3000
+```
+
+5. Deploy — Render builds from the `Dockerfile` automatically
+
+**Seeding the production database from your local machine:**
+
+```bash
+# Temporarily set your .env to the External Database URL
+DATABASE_URL=postgresql://user:password@host.render.com/dbname
+DATABASE_SSL=true
+
+npm run db:seed
+
+# Restore local values afterward
+DATABASE_URL=postgresql://game_news:secret@localhost:5435/game_news_db
+DATABASE_SSL=false
+```
+
+> Render requires SSL for all connections. `DATABASE_SSL=true` enables
+> `{ rejectUnauthorized: false }` on the postgres client, which is required
+> for Render's managed certificates.
+
+---
 
 ### Railway
 
-1. Create a PostgreSQL service on Railway
-2. Connect your GitHub repo as a new service
-3. Set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}`
-4. Set `ADMIN_API_KEY` to your secret key
-5. Deploy — Railway builds from the `Dockerfile` automatically
+1. Create a **PostgreSQL** service on Railway
+2. Create a new service and connect your GitHub repo
+3. Set environment variables:
 
-### Render
+```env
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+DATABASE_SSL=true
+ADMIN_API_KEY=your_secret_key
+```
 
-1. Create a PostgreSQL database on Render
-2. Create a Web Service, select Docker environment
-3. Set `DATABASE_URL` to the **Internal Database URL**
-4. Set `ADMIN_API_KEY` to your secret key
+4. Deploy — Railway detects the `Dockerfile` automatically
+
+---
 
 ### VPS
 
@@ -308,17 +370,20 @@ git clone https://github.com/your-username/game-news-server.git
 cd GameNewsServer
 cp .env.example .env   # fill in production values
 docker compose up -d
-npm run db:migrate
 ```
+
+Migrations run on startup — no separate migration step needed.
 
 ---
 
 ## Scripts
 
-| Script            | Description                          |
-|-------------------|--------------------------------------|
-| `npm start`       | Start the server                     |
-| `npm run dev`     | Start with nodemon (auto-reload)     |
-| `npm test`        | Run the test suite                   |
-| `npm run db:migrate` | Create tables and indexes         |
-| `npm run db:seed` | Insert initial data                  |
+| Script                | Description                        |
+|-----------------------|------------------------------------|
+| `npm start`           | Start the server                   |
+| `npm run dev`         | Start with nodemon (auto-reload)   |
+| `npm test`            | Run the test suite                 |
+| `npm run db:migrate`  | Create tables and indexes manually |
+| `npm run db:seed`     | Insert initial data                |
+| `npm run db:generate` | Generate Drizzle migration files   |
+| `npm run db:push`     | Apply generated Drizzle migrations |
