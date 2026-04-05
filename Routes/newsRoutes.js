@@ -5,25 +5,26 @@ const newsController = require('../Controllers/newsController')
 const validateNews   = require('../Middleware/validateNews')
 const auth           = require('../Middleware/auth')
 
-const readLimiter = rateLimit({
-  windowMs: 60_000,
-  max:      100,
-  message:  { error: 'Too many requests, please try again later.' },
+// ── Rate limiters ─────────────────────────────────────────────────────────────
+
+const baseLimiter = {
+  windowMs:        60_000,
+  message:         { error: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders:   false,
-})
+  keyGenerator:    (req) => req.ip,
+}
 
-const writeLimiter = rateLimit({
-  windowMs: 60_000,
-  max:      10,
-  message:  { error: 'Too many requests, please try again later.' },
-  standardHeaders: true,
-  legacyHeaders:   false,
-})
+const readLimiter  = rateLimit({ ...baseLimiter, max: 100 })
+const writeLimiter = rateLimit({ ...baseLimiter, max: 10  })
 
-router.post('/',         writeLimiter, auth, validateNews, newsController.createNews)
+// ── Routes ────────────────────────────────────────────────────────────────────
+
 router.get('/',          readLimiter,  newsController.getNews)
 router.get('/category',  readLimiter,  newsController.getNewsByCategory)
 router.get('/:id',       readLimiter,  newsController.getNewsById)
+router.post('/',         writeLimiter, auth, validateNews, newsController.createNews)
+router.put('/:id',       writeLimiter, auth, validateNews, newsController.updateNews)
+router.delete('/:id',    writeLimiter, auth,               newsController.deleteNews)
 
 module.exports = router

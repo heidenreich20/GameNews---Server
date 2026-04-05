@@ -18,7 +18,7 @@ function validateNews(req, res, next) {
       details: error.details.map(d => d.message),
     })
   }
-  req.body = value   // replace body with coerced/defaulted values
+  req.body = value
   next()
 }
 

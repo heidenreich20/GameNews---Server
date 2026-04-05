@@ -18,7 +18,7 @@ app.use(cors({
     'https://next-game-news.vercel.app',
     'http://localhost:3000',
   ],
-  methods:        ['GET', 'POST'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'x-api-key'],
 }))
 
@@ -39,12 +39,17 @@ app.use((_, res) => res.status(404).json({ error: 'Route not found' }))
 
 app.use((err, req, res, next) => {
   console.error(err)
-  
+
   if (err.code === '22P02') {
     return res.status(400).json({ error: 'Formato de ID inválido' })
   }
 
-  res.status(err.status ?? 500).json({ error: err.message ?? 'Internal server error' })
+  const status = err.status ?? 500
+  const message = status < 500
+    ? (err.message ?? 'Bad request')
+    : 'Internal server error'
+
+  res.status(status).json({ error: message })
 })
 
 if (require.main === module) {
@@ -54,28 +59,54 @@ if (require.main === module) {
   }
 
   const sql = postgres(process.env.DATABASE_URL, {
-    max:             10,
-    idle_timeout:    30,
+    max: 10,
+    idle_timeout: 30,
     connect_timeout: 10,
+    ssl: process.env.DATABASE_SSL === 'true' ? true : false,
   })
 
   const db = drizzle(sql)
 
+  // ── Graceful shutdown ────────────────────────────────────────────────────────
+
+  let server
+
+  async function shutdown(signal) {
+    console.log(`${signal} received, shutting down...`)
+    server.close(async () => {
+      try {
+        await sql.end()
+        console.log('Database connection closed')
+        process.exit(0)
+      } catch (err) {
+        console.error('Error during shutdown:', err)
+        process.exit(1)
+      }
+    })
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT',  () => shutdown('SIGINT'))
+
+  // ── Startup ──────────────────────────────────────────────────────────────────
+
   sql`SELECT 1`
-  .then(async () => {
-    app.locals.db  = db
-    app.locals.sql = sql
+    .then(async () => {
+      app.locals.db = db
+      app.locals.sql = sql
 
-    await runMigrations(sql)
+      await runMigrations(sql)
 
-    const port = process.env.PORT || 3000
-    app.listen(port, () => console.log(`Server running on port ${port}`))
-    console.log('Connected to database')
-  })
-  .catch(err => {
-    console.error('Database connection failed:', err)
-    process.exit(1)
-  })
+      const port = process.env.PORT || 3000
+      server = app.listen(port, () => {
+        console.log('Connected to database')
+        console.log(`Server running on port ${port}`)
+      })
+    })
+    .catch(err => {
+      console.error('Database connection failed:', err)
+      process.exit(1)
+    })
 }
 
 module.exports = app

@@ -1,6 +1,5 @@
-const { eq, sql, desc, ilike } = require('drizzle-orm')
+const { eq, sql, desc, ilike, and } = require('drizzle-orm');
 const { pgTable, uuid, text, varchar, timestamp, index } = require('drizzle-orm/pg-core')
-const postgres = require('postgres')
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -49,13 +48,22 @@ const News = {
   },
 
   async findAll(app, { category, type, limit = 20, offset = 0 } = {}) {
-    let query = getDb(app).select().from(news)
-    if (category) query = query.where(ilike(news.category, category))
-    if (type) query = query.where(eq(news.type, type))
-    return query.orderBy(desc(news.createdAt)).limit(limit).offset(offset)
+    const conditions = [
+      category ? ilike(news.category, category) : undefined,
+      type ? eq(news.type, type) : undefined,
+    ].filter(Boolean)
+
+    return getDb(app)
+      .select()
+      .from(news)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(news.createdAt))
+      .limit(limit)
+      .offset(offset)
   },
 
   async search(app, term) {
+    if (!term?.trim()) return []
     return getDb(app)
       .select()
       .from(news)
@@ -69,7 +77,7 @@ const News = {
   async updateById(app, id, data) {
     const [row] = await getDb(app)
       .update(news)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...data, updatedAt: sql`now()` })
       .where(eq(news.id, id))
       .returning()
     return row ?? null
@@ -83,12 +91,18 @@ const News = {
     return row ?? null
   },
 
-  async count(app, { category } = {}) {
-    const result = await getDb(app)
+  async count(app, { category, type } = {}) {
+    const conditions = [
+      category ? ilike(news.category, category) : undefined,
+      type ? eq(news.type, type) : undefined,
+    ].filter(Boolean)
+
+    const [{ count }] = await getDb(app)
       .select({ count: sql`count(*)::int` })
       .from(news)
-      .where(category ? ilike(news.category, category) : undefined)
-    return result[0].count
+      .where(conditions.length ? and(...conditions) : undefined)
+
+    return count
   },
 }
 

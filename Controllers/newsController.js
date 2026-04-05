@@ -1,27 +1,29 @@
-const { News } = require("../Models/News");
+const { News } = require('../Models/News')
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 
-exports.createNews = async (req, res) => {
+exports.createNews = async (req, res, next) => {
   try {
-    const article = await News.create(req.app, req.body);
-    res.status(201).json({ message: "Upload successful", article });
+    const article = await News.create(req.app, req.body)
+    res.status(201).json({ message: 'Upload successful', article })
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
+    next(err)
   }
-};
+}
 
-exports.getNews = async (req, res) => {
+exports.getNews = async (req, res, next) => {
   try {
-    const page   = parseInt(req.query.page,  10) || 1;
-    const limit  = parseInt(req.query.limit, 10) || 10;
-    const offset = (page - 1) * limit;
+    const { category, type } = req.query
+    const page   = parseInt(req.query.page,  10) || 1
+    const limit  = parseInt(req.query.limit, 10) || 10
+    const offset = (page - 1) * limit
+
+    const filters = { category, type, limit, offset }
 
     const [newsList, totalNewsCount] = await Promise.all([
-      News.findAll(req.app, { limit, offset }),
-      News.count(req.app),
-    ]);
+      News.findAll(req.app, filters),
+      News.count(req.app, { category, type }),
+    ])
 
     res.json({
       newsList,
@@ -29,46 +31,38 @@ exports.getNews = async (req, res) => {
       currentPage: page,
       totalPages:  Math.ceil(totalNewsCount / limit),
       hasNextPage: page * limit < totalNewsCount,
-    });
+    })
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    next(err)
   }
-};
+}
 
-exports.getNewsByCategory = async (req, res) => {
-  const limit        = parseInt(req.query.limit, 10) || 10;
-  const { category } = req.query;
-
+exports.getNewsById = async (req, res, next) => {
   try {
-    const [newsList, totalNewsCount, categoryCount] = await Promise.all([
-      News.findAll(req.app, { category, limit }),
-      News.count(req.app),
-      category ? News.count(req.app, { category }) : Promise.resolve(0),
-    ]);
-
-    res.json({
-      newsList,
-      categoryCount,
-      totalNewsCount,
-      error: (category && categoryCount === 0) ? "Category does not exist" : null,
-    });
+    const article = await News.findById(req.app, req.params.id)
+    if (!article) return res.status(404).json({ error: 'Article not found' })
+    res.json({ article })
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    next(err)
   }
-};
+}
 
-exports.getNewsById = async (req, res) => {
+exports.updateNews = async (req, res, next) => {
   try {
-    const article = await News.findById(req.app, req.params.id);
-    if (!article) return res.status(404).json({ error: "Article not found" });
-    res.json({ article });
+    const article = await News.updateById(req.app, req.params.id, req.body)
+    if (!article) return res.status(404).json({ error: 'Article not found' })
+    res.json({ message: 'Update successful', article })
   } catch (err) {
-    if (err.code === "22P02") {
-      return res.status(400).json({ error: "Invalid article ID" });
-    }
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    next(err)
   }
-};
+}
+
+exports.deleteNews = async (req, res, next) => {
+  try {
+    const article = await News.deleteById(req.app, req.params.id)
+    if (!article) return res.status(404).json({ error: 'Article not found' })
+    res.json({ message: 'Article deleted successfully' })
+  } catch (err) {
+    next(err)
+  }
+}
