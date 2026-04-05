@@ -38,17 +38,16 @@ app.get('/health', async (_, res) => {
 app.use((_, res) => res.status(404).json({ error: 'Route not found' }))
 
 app.use((err, req, res, next) => {
-  console.error(err)
+  const code = err.code ?? err.cause?.code
 
-  if (err.code === '22P02') {
-    return res.status(400).json({ error: 'Formato de ID inválido' })
+  if (code === '22P02') {
+    return res.status(400).json({ error: 'Invalid article ID' })
   }
 
   const status = err.status ?? 500
-  const message = status < 500
-    ? (err.message ?? 'Bad request')
-    : 'Internal server error'
+  const message = status < 500 ? (err.message ?? 'Bad request') : 'Internal server error'
 
+  if (status >= 500) console.error(err)
   res.status(status).json({ error: message })
 })
 
@@ -86,7 +85,7 @@ if (require.main === module) {
   }
 
   process.on('SIGTERM', () => shutdown('SIGTERM'))
-  process.on('SIGINT',  () => shutdown('SIGINT'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
 
   // ── Startup ──────────────────────────────────────────────────────────────────
 

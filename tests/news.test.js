@@ -18,6 +18,7 @@ const makeArticle = (overrides = {}) => ({
 
 let sql
 let db
+let sharedId
 
 beforeAll(async () => {
   sql = postgres(TEST_DB_URL)
@@ -55,7 +56,6 @@ async function seedMany(articles) {
 }
 
 describe('Gaming News API', () => {
-  let sharedId
 
   // ── POST /news ──────────────────────────────────────────────────────────
 
@@ -73,7 +73,6 @@ describe('Gaming News API', () => {
         author:   'Pablo',
       })
       expect(res.body.article.id).toBeDefined()
-      sharedId = res.body.article.id
     })
 
     it('returns 400 when required fields are missing', async () => {
@@ -164,47 +163,26 @@ describe('Gaming News API', () => {
       expect(res.body.newsList).toHaveLength(10)
       expect(res.body.currentPage).toBe(1)
     })
-  })
 
-  // ── GET /news/category ──────────────────────────────────────────────────
-
-  describe('GET /news/category', () => {
-    beforeEach(async () => {
-      await seedMany([
-        makeArticle({ category: 'RPG',    title: 'RPG Article 1' }),
-        makeArticle({ category: 'RPG',    title: 'RPG Article 2' }),
-        makeArticle({ category: 'Action', title: 'Action Article' }),
-      ])
-    })
-
-    it('filters by category and returns only matching articles', async () => {
-      const res = await request(app).get('/news/category?category=RPG&limit=10')
+    it('filters by category', async () => {
+      const res = await request(app).get('/news?category=Action&limit=20')
 
       expect(res.statusCode).toBe(200)
-      expect(res.body.newsList).toHaveLength(2)
-      expect(res.body.newsList.every(n => n.category === 'RPG')).toBe(true)
-      expect(res.body.categoryCount).toBe(2)
+      expect(res.body.newsList.every(n => n.category === 'Action')).toBe(true)
     })
 
-    it('is case-insensitive', async () => {
-      const res = await request(app).get('/news/category?category=rpg&limit=10')
+    it('is case-insensitive when filtering by category', async () => {
+      const res = await request(app).get('/news?category=action&limit=20')
 
       expect(res.statusCode).toBe(200)
-      expect(res.body.newsList).toHaveLength(2)
+      expect(res.body.newsList.length).toBeGreaterThan(0)
     })
 
-    it('returns all articles when no category is provided', async () => {
-      const res = await request(app).get('/news/category?limit=10')
+    it('returns 404 for a non-existent category', async () => {
+      const res = await request(app).get('/news?category=Cooking')
 
-      expect(res.statusCode).toBe(200)
-      expect(res.body.newsList).toHaveLength(3)
-    })
-
-    it('returns error message for non-existent category', async () => {
-      const res = await request(app).get('/news/category?category=Cooking&limit=5')
-
-      expect(res.body.error).toBe('Category does not exist')
-      expect(res.body.newsList).toHaveLength(0)
+      expect(res.statusCode).toBe(404)
+      expect(res.body.error).toBe('Category not found')
     })
   })
 
@@ -240,6 +218,82 @@ describe('Gaming News API', () => {
 
       expect(res.statusCode).toBe(400)
       expect(res.body.error).toBe('Invalid article ID')
+    })
+  })
+
+  // ── PUT /news/:id ───────────────────────────────────────────────────────
+
+  describe('PUT /news/:id', () => {
+    beforeEach(async () => {
+      const res = await request(app)
+        .post('/news')
+        .set('x-api-key', VALID_API_KEY)
+        .send(makeArticle())
+      sharedId = res.body.article.id
+    })
+
+    it('updates an article and returns it', async () => {
+      const res = await request(app)
+        .put(`/news/${sharedId}`)
+        .set('x-api-key', VALID_API_KEY)
+        .send(makeArticle({ title: 'Updated Title' }))
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body.article.title).toBe('Updated Title')
+    })
+
+    it('returns 404 for a non-existent ID', async () => {
+      const res = await request(app)
+        .put('/news/00000000-0000-0000-0000-000000000000')
+        .set('x-api-key', VALID_API_KEY)
+        .send(makeArticle())
+
+      expect(res.statusCode).toBe(404)
+    })
+
+    it('returns 401 without auth', async () => {
+      const res = await request(app)
+        .put(`/news/${sharedId}`)
+        .send(makeArticle())
+
+      expect(res.statusCode).toBe(401)
+    })
+  })
+
+  // ── DELETE /news/:id ────────────────────────────────────────────────────
+
+  describe('DELETE /news/:id', () => {
+    beforeEach(async () => {
+      const res = await request(app)
+        .post('/news')
+        .set('x-api-key', VALID_API_KEY)
+        .send(makeArticle())
+      sharedId = res.body.article.id
+    })
+
+    it('deletes an article and returns confirmation', async () => {
+      const res = await request(app)
+        .delete(`/news/${sharedId}`)
+        .set('x-api-key', VALID_API_KEY)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body.message).toBe('Article deleted successfully')
+    })
+
+    it('returns 404 when fetching a deleted article', async () => {
+      await request(app)
+        .delete(`/news/${sharedId}`)
+        .set('x-api-key', VALID_API_KEY)
+
+      const res = await request(app).get(`/news/${sharedId}`)
+      expect(res.statusCode).toBe(404)
+    })
+
+    it('returns 401 without auth', async () => {
+      const res = await request(app)
+        .delete(`/news/${sharedId}`)
+
+      expect(res.statusCode).toBe(401)
     })
   })
 

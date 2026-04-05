@@ -14,8 +14,8 @@ exports.createNews = async (req, res, next) => {
 exports.getNews = async (req, res, next) => {
   try {
     const { category, type } = req.query
-    const page   = parseInt(req.query.page,  10) || 1
-    const limit  = parseInt(req.query.limit, 10) || 10
+    const page = parseInt(req.query.page, 10) || 1
+    const limit = parseInt(req.query.limit, 10) || 10
     const offset = (page - 1) * limit
 
     const filters = { category, type, limit, offset }
@@ -25,11 +25,15 @@ exports.getNews = async (req, res, next) => {
       News.count(req.app, { category, type }),
     ])
 
+    if (category && totalNewsCount === 0) {
+      return res.status(404).json({ error: 'Category not found' })
+    }
+
     res.json({
       newsList,
       totalNewsCount,
       currentPage: page,
-      totalPages:  Math.ceil(totalNewsCount / limit),
+      totalPages: Math.ceil(totalNewsCount / limit),
       hasNextPage: page * limit < totalNewsCount,
     })
   } catch (err) {
