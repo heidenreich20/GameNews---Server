@@ -7,6 +7,7 @@ const { runMigrations } = require('./db/migrate')
 require('dotenv').config()
 
 const newsRoutes = require('./Routes/newsRoutes')
+const uploadRoutes = require('./Routes/uploadRoutes')
 
 const app = express()
 app.set('trust proxy', 1)
@@ -25,6 +26,8 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }))
 
 app.use('/news', newsRoutes)
+
+app.use('/upload', uploadRoutes)
 
 app.get('/health', async (_, res) => {
   try {
@@ -61,7 +64,7 @@ if (require.main === module) {
     max: 10,
     idle_timeout: 30,
     connect_timeout: 10,
-    ssl: process.env.DATABASE_SSL === 'true' ? true : false,
+    ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
   })
 
   const db = drizzle(sql)

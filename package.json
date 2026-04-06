@@ -4,7 +4,7 @@
   "description": "RESTful API for the Game News platform",
   "main": "server.js",
   "engines": {
-    "node": "22.13.1"
+    "node": ">=22.13.1"
   },
   "scripts": {
     "start": "node server.js",
@@ -16,20 +16,23 @@
     "db:push": "drizzle-kit migrate"
   },
   "dependencies": {
-  "cors": "^2.8.5",
-  "dotenv": "^16.0.3",
-  "drizzle-orm": "^0.44.0",
-  "express": "^4.18.2",
-  "express-rate-limit": "^8.3.2",
-  "helmet": "^7.0.0",
-  "joi": "^17.8.3",
-  "postgres": "^3.4.4"
-},
-"devDependencies": {
-  "drizzle-kit": "^0.31.0",
-  "jest": "^29.7.0",
-  "nodemon": "^3.1.14",
-  "supertest": "^6.3.4"
-},
+    "cloudinary": "^2.9.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "drizzle-orm": "^0.44.0",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^7.0.0",
+    "joi": "^17.8.3",
+    "multer": "^2.1.1",
+    "postgres": "^3.4.4"
+  },
+  "devDependencies": {
+    "@types/multer": "^2.1.0",
+    "drizzle-kit": "^0.18.1",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^6.3.4"
+  },
   "license": "MIT"
 }
